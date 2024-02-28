@@ -1,0 +1,181 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Random;
+
+public class Road extends JPanel implements ActionListener, Runnable {
+
+    Timer mainTimer = new Timer(20, this);
+    Image img = new ImageIcon("Road.png").getImage();
+
+    Player p = new Player(this);
+    Thread enemiesFactory = new Thread(this);
+    List<Enemy> enemies = new ArrayList<>();
+
+    boolean isPaused = false;
+    int score = 0;
+    int winDistance = 33333;
+
+    public Road() {
+        mainTimer.start();
+        enemiesFactory.start();
+        addKeyListener(new MyKeyAdapter());
+        setFocusable(true);
+    }
+
+    private class MyKeyAdapter extends KeyAdapter {
+        public void keyPressed(KeyEvent e) {
+            if (e.getKeyCode() == KeyEvent.VK_P) {
+                togglePause();
+            } else {
+                p.keyPressed(e);
+            }
+        }
+
+        public void keyReleased(KeyEvent e) {
+            p.keyReleased(e);
+        }
+    }
+
+    private void togglePause() {
+        isPaused = !isPaused;
+        if (isPaused) {
+            mainTimer.stop();
+        } else {
+            mainTimer.start();
+        }
+        repaint();
+    }
+
+    public void paint(Graphics g) {
+        g = (Graphics2D) g;
+        g.drawImage(img, p.layer1, 0, null);
+        g.drawImage(img, p.layer2, 0, null);
+        g.drawImage(p.img, p.x, p.y, null);
+
+        double v = (240.0 / Player.MAX_V) * p.V;
+        g.setColor(Color.DARK_GRAY);
+        Font font = new Font("Arial", Font.BOLD, 18);
+        g.setFont(font);
+        g.drawString("Швидкість: " + v + " км/год", 100, 30);
+        g.drawString("Очки: " + score, 100, 50);
+
+        Iterator<Enemy> i = enemies.iterator();
+        while (i.hasNext()) {
+            Enemy e = i.next();
+            if (e.x >= 9999 || e.x <= -9999) {
+                i.remove();
+            } else {
+                e.move();
+                g.drawImage(e.img, e.x, e.y, null);
+            }
+        }
+
+        if (isPaused) {
+            g.setColor(Color.RED);
+            font = new Font("Arial", Font.BOLD, 42);
+            g.setFont(font);
+            g.drawString("PAUSED", 300, 250);
+        }
+    }
+
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        if (!isPaused) {
+            p.move();
+            repaint();
+            testCollision();
+            testCollisionEnemy();
+            tesWin();
+        }
+    }
+
+    private void tesWin() {
+        if (p.S > winDistance) {
+            int option = JOptionPane.showOptionDialog(null,
+                    "Ви пермогли!\n!!! ПЕРЕМОГА :) !!!\nОчки: " + score + "\nХочете перейти на наступний складніший рівень?",
+                    "Перемога", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, null, null);
+
+            if (option == JOptionPane.YES_OPTION) {
+                increaseWinDistance();
+                resetGame();
+            } else {
+                JOptionPane.showMessageDialog(null, "Гра завершена. Дякую за гру!");
+                System.exit(0);
+            }
+        }
+    }
+
+    private void testCollisionEnemy() {
+        Iterator<Enemy> i = enemies.iterator();
+        while (i.hasNext()) {
+            Enemy e = i.next();
+            if (p.getRect().intersects(e.getRect())) {
+                int option = JOptionPane.showOptionDialog(null,
+                        "!!! Поразка !!!\nОчки: " + score + "\nСпробувати ще раз?",
+                        "Поразка", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, null, null);
+
+                if (option == JOptionPane.YES_OPTION) {
+                    resetGame();
+                    return;
+                } else {
+                    JOptionPane.showMessageDialog(null, "Гра завершена. Дякую за гру!");
+                    System.exit(0);
+                }
+            }
+        }
+    }
+
+
+    private void testCollision() {
+        List<Enemy> enemiesToRemove = new ArrayList<>();
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy enemy1 = enemies.get(i);
+            for (int j = i + 1; j < enemies.size(); j++) {
+                Enemy enemy2 = enemies.get(j);
+
+                if (enemy1.getRect().intersects(enemy2.getRect())) {
+                    enemiesToRemove.add(enemy1);
+                    enemiesToRemove.add(enemy2);
+                }
+            }
+        }
+        enemies.removeAll(enemiesToRemove);
+    }
+
+    @Override
+    public void run() {
+        while (true) {
+            Random rand = new Random();
+            try {
+                Thread.sleep(891);
+                enemies.add(new Enemy(800, rand.nextInt(485), rand.nextInt(51), this));
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public void increaseScore() {
+        score++;
+    }
+
+    private void resetGame() {
+        p = new Player(this);
+        enemies.clear();
+        score = 0;
+        p.layer1 = 0;
+        p.layer2 = 800;
+        p.S = 0;
+    }
+
+    private void increaseWinDistance() {
+        winDistance *= 2;
+    }
+}
